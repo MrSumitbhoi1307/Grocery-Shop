@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 
 const authUser = async (req, res, next) => {
     try {
-        const token = req.cookies.token;   // 🔥 IMPORTANT
+        const token = req.cookies.token;
 
         if (!token) {
             return res.json({
@@ -20,8 +20,7 @@ const authUser = async (req, res, next) => {
             });
         }
 
-        // 🔥 THIS IS MAIN FIX
-        req.user = decoded;  
+        req.user = decoded;
 
         next();
 

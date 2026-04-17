@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import axios from "axios";
@@ -32,23 +32,19 @@ export const AppContextProvider = ({ children }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [isSeller, setIsSeller] = useState(false);
     const [cartLoaded, setCartLoaded] = useState(false);
+    const [orders, setOrders] = useState([]);
+    const [addressList, setAddressList] = useState([]);
+    const [selectedAddress, setSelectedAddress] = useState(null);
 
-    const [orders, setOrders] = useState(() => {
-        const saved = localStorage.getItem("myOrders");
-        return saved ? JSON.parse(saved) : [];
-    });
-
-    const [addressList, setAddressList] = useState([
-        "Street 123, Main City, New State, IN"
-    ]);
-    const [selectedAddress, setSelectedAddress] = useState(addressList[0]);
+    // 🔥 This ref prevents cart sync right after order placement
+    const skipCartSync = useRef(false);
 
     const upiDetails = {
         upiId: "sumit@upi",
         merchantName: "Sumit Grocery Store"
     };
 
-    // ✅ FETCH USER
+    // ✅ FETCH USER + LOAD CART FROM DB
     const fetchUser = async () => {
         try {
             const { data } = await axios.get("/api/user/is-auth");
@@ -58,15 +54,16 @@ export const AppContextProvider = ({ children }) => {
                 setCartItems(data.user.cartItems || {});
             } else {
                 setUser(null);
-                setCartItems({}); // ✅ important
+                setCartItems({});
             }
-            setCartLoaded(true); // 🔥 IMPORTANT
+
+            setCartLoaded(true);
 
         } catch (error) {
             console.log("FetchUser Error:", error.message);
             setUser(null);
-            setCartItems({}); // ✅ important
-            setCartLoaded(true); // 🔥 IMPORTANT
+            setCartItems({});
+            setCartLoaded(true);
         }
     };
 
@@ -74,12 +71,21 @@ export const AppContextProvider = ({ children }) => {
     const fetchProducts = async () => {
         try {
             const { data } = await axios.get("/api/product/list");
-
-            if (data.success) {
-                setProducts(data.products);
-            }
+            if (data.success) setProducts(data.products);
         } catch (error) {
             console.log("FetchProducts Error:", error.message);
+        }
+    };
+
+    // ✅ FETCH ORDERS FROM DB
+    const fetchOrders = async () => {
+        try {
+            const { data } = await axios.get("/api/order/user");
+            if (data.success) {
+                setOrders(data.orders);
+            }
+        } catch (error) {
+            console.log("FetchOrders Error:", error.message);
         }
     };
 
@@ -93,11 +99,6 @@ export const AppContextProvider = ({ children }) => {
         }
     };
 
-    // ✅ SAVE ORDERS
-    useEffect(() => {
-        localStorage.setItem("myOrders", JSON.stringify(orders));
-    }, [orders]);
-
     // ✅ INITIAL LOAD
     useEffect(() => {
         fetchUser();
@@ -105,32 +106,38 @@ export const AppContextProvider = ({ children }) => {
         fetchSeller();
     }, []);
 
-    // ✅ FIXED CART UPDATE (IMPORTANT)
-   // ✅ FIXED CART UPDATE (IMPORTANT)
-useEffect(() => {
-    const updateCart = async () => {
-        try {
-            const { data } = await axios.post(
-                "/api/cart/update",
-                { cartItems },
-                { withCredentials: true }
-            );
+    // ✅ FETCH ORDERS WHEN USER LOADS
+    useEffect(() => {
+        if (user) {
+            fetchOrders();
+        }
+    }, [user]);
 
-            if (!data.success) {
-                toast.error(data.message);
+    // ✅ CART SYNC TO DB — with skip guard
+    useEffect(() => {
+        const updateCart = async () => {
+            // 🔥 Skip sync if order was just placed (cart was intentionally cleared)
+            if (skipCartSync.current) {
+                skipCartSync.current = false;
+                return;
             }
 
-        } catch (error) {
-            toast.error(error.message);
+            try {
+                const { data } = await axios.post("/api/cart/update", { cartItems });
+                if (!data.success) {
+                    toast.error(data.message);
+                }
+            } catch (error) {
+                toast.error(error.message);
+            }
+        };
+
+        if (user && cartLoaded) {
+            updateCart();
         }
-    };
 
-    // 🔥 FIX: run only after cart loaded
-    if (user && cartLoaded) {
-        updateCart();
-    }
+    }, [cartItems]);
 
-}, [cartItems, cartLoaded]);
     // ✅ CART FUNCTIONS
     const addToCart = (itemId) => {
         let cart = structuredClone(cartItems);
@@ -141,10 +148,8 @@ useEffect(() => {
 
     const removeFromCart = (itemId) => {
         let cart = structuredClone(cartItems);
-
         if (cart[itemId] > 1) cart[itemId] -= 1;
         else delete cart[itemId];
-
         setCartItems(cart);
     };
 
@@ -154,50 +159,57 @@ useEffect(() => {
 
     const getCartAmount = () => {
         let total = 0;
-
         for (const id in cartItems) {
             const item = products.find(p => String(p._id) === String(id));
             if (item) total += item.offerPrice * cartItems[id];
         }
-
         return Math.floor(total * 100) / 100;
     };
 
-    // ✅ ORDER
-    const placeOrder = (paymentMethod) => {
-
-        const orderItems = [];
-
-        for (const id in cartItems) {
-            const product = products.find(p => String(p._id) === String(id));
-
-            if (product) {
-                orderItems.push({
-                    product,
-                    quantity: cartItems[id]
-                });
+    // ✅ PLACE ORDER — used by Cart.jsx
+    const placeOrder = async (selectedAddress, paymentMethod = "Cash On Delivery", cartArray) => {
+        try {
+            if (!cartArray || cartArray.length === 0) {
+                toast.error("Cart is empty!");
+                return false;
             }
+
+            if (!selectedAddress) {
+                toast.error("Please select a delivery address!");
+                return false;
+            }
+
+            const orderData = {
+                userId: user._id,
+                items: cartArray.map(item => ({
+                    product: item._id,
+                    quantity: item.quantity
+                })),
+                address: selectedAddress._id, // send address ID to backend
+                amount: getCartAmount(),
+                paymentType: paymentMethod
+            };
+
+            const { data } = await axios.post("/api/order/cod", orderData);
+
+            if (data.success) {
+                // 🔥 Set skip flag BEFORE clearing cart
+                skipCartSync.current = true;
+                setCartItems({});
+                await fetchOrders(); // refresh orders from DB
+                toast.success("Order placed successfully!");
+                navigate("/my-orders");
+                return true;
+            } else {
+                toast.error(data.message);
+                return false;
+            }
+
+        } catch (error) {
+            console.log("PlaceOrder Error:", error);
+            toast.error("Order failed. Please try again.");
+            return false;
         }
-
-        if (orderItems.length === 0) {
-            toast.error("Cart is empty!");
-            return;
-        }
-
-        const newOrder = {
-            _id: Date.now().toString().slice(-6),
-            items: orderItems,
-            amount: getCartAmount(),
-            paymentType: paymentMethod,
-            status: "Order Placed",
-            createdAt: new Date().toISOString(),
-            address: selectedAddress
-        };
-
-        setOrders(prev => [newOrder, ...prev]);
-        setCartItems({});
-        toast.success("Order placed successfully!");
-        navigate("/orders");
     };
 
     const updateOrderStatus = (orderId, newStatus) => {
@@ -213,47 +225,37 @@ useEffect(() => {
         setSelectedAddress(addr);
     };
 
-    // ✅ CONTEXT VALUE
     const value = {
         navigate,
-
         user,
         setUser,
         fetchUser,
-
         products,
         fetchProducts,
-
         currency,
-
         cartItems,
         setCartItems,
         addToCart,
         removeFromCart,
         getCartCount,
         getCartAmount,
-
         showUserLogin,
         setShowUserLogin,
-
         searchQuery,
         setSearchQuery,
-
         addressList,
         setAddressList,
         selectedAddress,
         setSelectedAddress,
         addNewAddress,
-
         orders,
+        setOrders,
+        fetchOrders,
         placeOrder,
         updateOrderStatus,
-
         upiDetails,
-
         isSeller,
         setIsSeller,
-
         axios
     };
 

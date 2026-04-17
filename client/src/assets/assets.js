@@ -66,7 +66,6 @@ import coca_cola_image_3 from "./coca_cola_image_3.jpg";
 import coca_cola_image_4 from "./coca_cola_image_4.jpg";
 import brown_bread_image from "./brown_bread_image.png";
 import basmati_rice_image from "./basmati_rice_image.png";
-import paneer_image from "./paneer_image.png";
 import orange_image_1 from "./orange_image_1.png";
 import orange_image_2 from "./orange_image_2.jpg";
 import orange_image_3 from "./orange_image_3.jpg";
@@ -90,7 +89,6 @@ import grapes_image_1 from "./grapes_image_1.png";
 import grapes_image_2 from "./grapes_image_2.jpg";
 import grapes_image_3 from "./grapes_image_3.jpg";
 import grapes_image_4 from "./grapes_image_4.jpg";
-import paneer_image_2 from "./paneer_image_2.png";
 import sprite_image_1 from "./sprite_image_1.png";
 import sprite_image_2 from "./sprite_image_2.jpg";
 import sprite_image_3 from "./sprite_image_3.jpg";
@@ -114,6 +112,7 @@ import vanilla_muffins_image from "./vanilla_muffins_image.png";
 import quinoa_image from "./quinoa_image.png";
 import brown_rice_image from "./brown_rice_image.png";
 import barley_image from "./barley_image.png";
+
 
 export const assets = {
   logo,
@@ -433,22 +432,6 @@ export const dummyProducts = [
     inStock: true,
   },
   {
-    _id: "ek57j78k",
-    name: "Paneer 200g",
-    category: "Dairy",
-    price: 90,
-    offerPrice: 85,
-    image: [paneer_image],
-    description: [
-      "Soft and fresh",
-      "Rich in protein",
-      "Ideal for curries and snacks",
-    ],
-    createdAt: "2025-03-25T07:17:46.018Z",
-    updatedAt: "2025-03-25T07:18:13.103Z",
-    inStock: true,
-  },
-  {
     _id: "ek58j89k",
     name: "Eggs 12 pcs",
     category: "Dairy",
@@ -459,22 +442,6 @@ export const dummyProducts = [
       "Farm fresh",
       "Rich in protein",
       "Ideal for breakfast and baking",
-    ],
-    createdAt: "2025-03-25T07:17:46.018Z",
-    updatedAt: "2025-03-25T07:18:13.103Z",
-    inStock: true,
-  },
-  {
-    _id: "ek59j90k",
-    name: "Paneer 200g",
-    category: "Dairy",
-    price: 90,
-    offerPrice: 85,
-    image: [paneer_image_2],
-    description: [
-      "Soft and fresh",
-      "Rich in protein",
-      "Ideal for curries and snacks",
     ],
     createdAt: "2025-03-25T07:17:46.018Z",
     updatedAt: "2025-03-25T07:18:13.103Z",

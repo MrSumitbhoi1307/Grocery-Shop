@@ -1,58 +1,74 @@
-import Order from "../models/Order.js"   // FIX: 'order' → 'Order' (capital)
-import Product from "../models/Product.js"
+import Order from "../models/Order.js";
+import Product from "../models/Product.js";
 
 // Place Order COD : /api/order/cod
-export const placeOrderCOd = async (req, res) => {
+export const placeOrderCOD = async (req, res) => {
     try {
-        const { userId, items, address } = req.body
-        if (!address || items.length === 0) {
-            return res.json({ success: false, message: "Invalid data" })
+        const { userId, items, address } = req.body;
+
+        if (!address || !items || items.length === 0) {
+            return res.json({ success: false, message: "Invalid data" });
         }
 
-        let amount = await items.reduce(async (acc, item) => {
-            const product = await Product.findById(item.product)
-            return (await acc) + product.offerPrice * item.quantity
-        }, 0)
+        let amount = 0;
+        for (const item of items) {
+            const product = await Product.findById(item.product);
+            if (product) {
+                amount += product.offerPrice * item.quantity;
+            }
+        }
 
-        amount += Math.floor(amount * 0.02)
+        // Add 2% tax
+        amount += Math.floor(amount * 0.02);
 
-        await Order.create({          // FIX: order.create → Order.create
+        await Order.create({
             userId,
             items,
             amount,
             address,
-            paymentType: "COD"        // FIX: "COd" → "COD"
-        })
-        return res.json({ success: true, message: "Order Placed successfully" })
-    } catch (error) {
-        return res.json({ success: false, message: error.message })
-    }
-}
+            paymentType: "COD",
+            payment: false,
+            date: Date.now()
+        });
 
-// Get Orders by User Id : /api/order/user
+        return res.json({ success: true, message: "Order Placed successfully" });
+
+    } catch (error) {
+        console.log(error);
+        return res.json({ success: false, message: error.message });
+    }
+};
+
+// Get Orders by User : /api/order/user
 export const getUserOrders = async (req, res) => {
     try {
-        const { userId } = req.body          // FIX: uerId → userId
-        const orders = await Order.find({    // FIX: order → Order
-            userId,
-            $or: [{ paymentType: "COD" }, { isPaid: true }]
-        }).populate("items.product address") // FIX: item → items
-          .sort({ createdAt: -1 })
-        res.json({ success: true, orders })
-    } catch (error) {
-        res.json({ success: false, message: error.message })
-    }
-}
+        // 🔥 FIX: use req.user.id (set by authUser middleware via JWT)
+        const userId = req.user.id;
 
-// Get All Orders (for seller/admin) : /api/order/seller
-export const getAllOrders = async (req, res) => {  // FIX: getAllOrder → getAllOrders
-    try {
-        const orders = await Order.find({           // FIX: order → Order
-            $or: [{ paymentType: "COD" }, { isPaid: true }]
-        }).populate("items.product address")        // FIX: item → items
-          .sort({ createdAt: -1 })
-        res.json({ success: true, orders })
+        const orders = await Order.find({ userId })
+            .populate("address")
+            .populate("items.product")
+            .sort({ createdAt: -1 });
+
+        res.json({ success: true, orders });
+
     } catch (error) {
-        res.json({ success: false, message: error.message })
+        console.log("getUserOrders Error:", error.message);
+        res.json({ success: false, message: error.message });
     }
-}
+};
+
+// Get All Orders (Seller) : /api/order/seller
+export const getAllOrders = async (req, res) => {
+    try {
+        const orders = await Order.find({})
+            .populate("items.product address")
+            .sort({ createdAt: -1 });
+
+        res.json({ success: true, orders });
+
+    } catch (error) {
+        console.log("getAllOrders Error:", error.message);
+        res.json({ success: false, message: error.message });
+    }
+};
